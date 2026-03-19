@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 连接测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .success {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            color: #0369a1;
+        }
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 前后端连接测试</h1>
+    
+    <div>
+        <h3>测试项目：</h3>
+        <button onclick="testHealth()">1. 健康检查</button>
+        <button onclick="testQuery()">2. NL2SQL 查询</button>
+        <button onclick="testCORS()">3. CORS 测试</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+
+        function addResult(title, success, data) {
+            const div = document.createElement('div');
+            div.className = `test-result ${success ? 'success' : 'error'}`;
+            div.innerHTML = `
+                <strong>${success ? '✅' : '❌'} ${title}</strong>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            document.getElementById('results').appendChild(div);
+        }
+
+        async function testHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                addResult('健康检查', response.ok, data);
+            } catch (error) {
+                addResult('健康检查', false, { error: error.message });
+            }
+        }
+
+        async function testQuery() {
+            try {
+                const response = await fetch(`${API_BASE}/api/nl2sql/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: '统计用户总数',
+                        agent_id: '1',
+                        thread_id: 'test_' + Date.now()
+                    })
+                });
+                const data = await response.json();
+                addResult('NL2SQL 查询', response.ok, data);
+            } catch (error) {
+                addResult('NL2SQL 查询', false, { error: error.message });
+            }
+        }
+
+        async function testCORS() {
+            try {
+                const response = await fetch(`${API_BASE}/api/nl2sql/query`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type',
+                        'Origin': 'http://localhost:5173'
+                    }
+                });
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers')
+                };
+                addResult('CORS 预检请求', response.ok, corsHeaders);
+            } catch (error) {
+                addResult('CORS 预检请求', false, { error: error.message });
+            }
+        }
+
+        // 自动运行所有测试
+        window.onload = () => {
+            console.log('自动运行测试...');
+            setTimeout(testHealth, 500);
+            setTimeout(testQuery, 1000);
+            setTimeout(testCORS, 1500);
+        };
+    </script>
+</body>
+</html>

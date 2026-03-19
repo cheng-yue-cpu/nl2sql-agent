@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS 调试工具</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .output {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        .success { color: #6a9955; }
+        .error { color: #f48771; }
+        .info { color: #4ec9b0; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #1177bb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 CORS 调试工具</h1>
+    <p>当前页面地址：<span id="origin"></span></p>
+    
+    <div>
+        <button onclick="testCORS()">1. 测试 CORS 预检</button>
+        <button onclick="testPOST()">2. 测试 POST 请求</button>
+        <button onclick="testSimpleGET()">3. 测试简单 GET</button>
+        <button onclick="clearOutput()">清空</button>
+    </div>
+    
+    <h2>输出:</h2>
+    <div class="output" id="output"></div>
+    
+    <h2>浏览器信息:</h2>
+    <div class="output" id="browser-info"></div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        
+        // 显示当前源
+        document.getElementById('origin').textContent = window.location.origin;
+        
+        // 显示浏览器信息
+        const browserInfo = {
+            'User Agent': navigator.userAgent,
+            'Origin': window.location.origin,
+            'Protocol': window.location.protocol,
+            'Host': window.location.host,
+            'localStorage': typeof localStorage !== 'undefined' ? '✅ 支持' : '❌ 不支持',
+            'fetch': typeof fetch !== 'undefined' ? '✅ 支持' : '❌ 不支持'
+        };
+        document.getElementById('browser-info').textContent = JSON.stringify(browserInfo, null, 2);
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent += `[${timestamp}] ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+        }
+        
+        async function testCORS() {
+            log('========== CORS 预检请求 (OPTIONS) ==========', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/api/nl2sql/query`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type',
+                        'Origin': window.location.origin
+                    }
+                });
+                
+                log(`HTTP ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                    'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials')
+                };
+                
+                log('CORS 响应头:', 'info');
+                log(JSON.stringify(corsHeaders, null, 2), 'info');
+                
+                const allowed = corsHeaders['Access-Control-Allow-Origin'] === window.location.origin;
+                log(`CORS 状态：${allowed ? '✅ 允许' : '❌ 拒绝'}`, allowed ? 'success' : 'error');
+                
+            } catch (error) {
+                log(`❌ CORS 测试失败：${error.message}`, 'error');
+                log(`错误类型：${error.constructor.name}`, 'error');
+                log(`错误代码：${error.code || 'N/A'}`, 'error');
+            }
+        }
+        
+        async function testPOST() {
+            log('========== POST 请求测试 ==========', 'info');
+            try {
+                const startTime = Date.now();
+                const response = await fetch(`${API_BASE}/api/nl2sql/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: 'CORS 测试',
+                        agent_id: '1',
+                        thread_id: 'cors_test_' + Date.now()
+                    })
+                });
+                
+                const duration = Date.now() - startTime;
+                log(`HTTP ${response.status} ${response.statusText} (${duration}ms)`, response.ok ? 'success' : 'error');
+                
+                const data = await response.json();
+                log('响应数据:', 'info');
+                log(JSON.stringify(data, null, 2), 'info');
+                
+            } catch (error) {
+                log(`❌ POST 测试失败：${error.message}`, 'error');
+                log(`错误类型：${error.constructor.name}`, 'error');
+                log(`错误代码：${error.code || 'N/A'}`, 'error');
+                log(`错误堆栈：${error.stack}`, 'error');
+            }
+        }
+        
+        async function testSimpleGET() {
+            log('========== GET 请求测试 ==========', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                log(`HTTP ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
+                
+                const data = await response.json();
+                log('响应数据:', 'info');
+                log(JSON.stringify(data, null, 2), 'info');
+                
+            } catch (error) {
+                log(`❌ GET 测试失败：${error.message}`, 'error');
+                log(`错误类型：${error.constructor.name}`, 'error');
+            }
+        }
+        
+        // 页面加载时自动测试
+        window.onload = () => {
+            log('页面加载完成', 'info');
+            log('请依次点击按钮测试 CORS 和 API 连接', 'info');
+            log('', 'info');
+            log('提示：如果 CORS 预检失败，请检查:', 'info');
+            log('1. 后端 CORS 配置是否包含当前 origin', 'info');
+            log('2. 后端服务是否运行在 http://127.0.0.1:8000', 'info');
+            log('3. 浏览器是否阻止了跨域请求', 'info');
+        };
+    </script>
+</body>
+</html>
